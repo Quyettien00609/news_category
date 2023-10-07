@@ -13,6 +13,8 @@ class Categories extends Model
         'admin_id', 'image', 'status', 'meta_title', 'meta_description',
     ];
 
+
+
     public function user()
     {
         return $this->belongsTo(User::class, 'admin_id');

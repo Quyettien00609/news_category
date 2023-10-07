@@ -40,6 +40,10 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+        'reader' => [
+            'driver' => 'session',
+            'provider' => 'readers', // Sử dụng provider readers cho guard này
+        ],
     ],
 
     /*
@@ -63,6 +67,10 @@ return [
         'users' => [
             'driver' => 'eloquent',
             'model' => App\Models\User::class,
+        ],
+        'readers' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\Reader::class,
         ],
 
         // 'users' => [

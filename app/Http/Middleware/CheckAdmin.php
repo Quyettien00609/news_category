@@ -17,7 +17,7 @@ class CheckAdmin
     public function handle(Request $request, Closure $next)
     {
         if ($request->user()->role != 1) {
-            return abort(403, 'Unauthorized action.');
+            return abort(403, 'Người dùng chưa đăng nhập');
         }
 
         return $next($request);

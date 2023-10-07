@@ -10,51 +10,110 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
 use Illuminate\Auth\RequestGuard;
-
+use Illuminate\Validation\ValidationException;
+use App\Repositories\AccountRepository;
+use App\Repositories\ErrorRepository;
 class UserController extends Controller
 {
+    protected $AccountRepository;
+
+    public function __construct(AccountRepository $AccountRepository,ErrorRepository $ErrorRepository)
+    {
+        $this->AccountRepository = $AccountRepository;
+        $this->ErrorRepository = $ErrorRepository;
+    }
+
+    protected $ErrorRepository;
+
+
     /**
      * Create User
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function register (Request $request)
+    public function register(Request $request)
     {
+        $erorAcc=$this->ErrorRepository->errorexist();
         try {
-            //Validated
-            $validateUser = Validator::make($request->all(),
-                [
-                    'name' => 'required|min:2|max:100',
-                    'email' => 'required|email|unique:users,email',
-                    'password' => 'required|min:6|max:100'
-                ]);
-
-            if($validateUser->fails()){
-                return response()->json([
-                    'status' => false,
-                    'message' => 'validation error',
-                    'errors' => $validateUser->errors()
-                ], 401);
-            }
-
-            $user = User::create([
-                'name' => $request->name,
-                'email' => $request->email,
-                'password' => Hash::make($request->password)
+            $validatedData = $request->validate([
+                'email' => 'required|email',
+                'password' => 'required|min:6',
+                'name' => 'required|string|max:255',
+            ], [
+                'email.required' => 'Email không được trống',
+                'email.email' => 'Email không hợp lệ',
+                'password.required' => 'Mật khẩu không được trống',
+                'password.min' => 'Mật khẩu ít nhất 6 ký tự',
+                'name.required' => 'Tên không được trống',
+                'name.string' => 'Tên phải là một chuỗi',
+                'name.max' => 'Tên không được dài hơn :max ký tự',
             ]);
 
-            return response()->json([
-                'status' => true,
-                'data'=>$user,
-                'message' => 'User Created Successfully',
-                'token' => $user->createToken("API TOKEN")->plainTextToken
-            ], 200);
+            $user = $this->AccountRepository->findBy('email', $request->email);
 
-        } catch (\Throwable $th) {
+            if (!$user) {
+                $data = $request->all();
+                $password = Hash::make( $request->input('password'));
+                $user = $this->AccountRepository->create($data);
+                $user->password=$password;
+                $user->save();
+
+                return response()->json([
+                    'message' => 'Đăng ký thành công',
+                    'authenticated' => $user,
+                    'status'=>201
+                ]);
+            } else {
+                return response()->json([
+                    'message' => 'Email đã tồn tại',
+                    'authenticated' => $user,
+                    'status'=>422
+                    ]);
+            }
+        } catch (ValidationException $e) {
             return response()->json([
-                'status' => false,
-                'message' => $th->getMessage()
-            ], 500);
+                'message'=>'Lỗi máy chủ nội bộ: Đã xảy ra lỗi không mong muốn.',
+                'status'=>500
+            ]);
+        }
+    }
+    public function loginUser(Request $request)
+    {
+        $validatedData = $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|min:6',
+        ], [
+            'email.required' => 'Email không được trống',
+            'email.email' => 'Email không hợp lệ',
+            'password.required' => 'Mật khẩu không được trống',
+            'password.min' => 'Mật khẩu ít nhất 6 ký tự',
+        ]);
+        try {
+            $credentials = $request->only('email', 'password');
+
+            $user = $this->AccountRepository->findBy('email', $request->email);
+;
+            if ($user) {
+               $auth =$this->AccountRepository->loginUser($credentials);
+
+                if ($auth) {
+                    return response()->json([
+                        'message' => 'Đăng nhập thành công',
+                        'data' => $user,
+                        'token' => $user->createToken("API TOKEN")->plainTextToken
+                    ]);
+                }
+            }
+            return response()->json([
+                'message'=>'Thông tin tài khoản hoặc mật khẩu không chính xác',
+                'status'=>401
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message'=>'Lỗi máy chủ nội bộ: Đã xảy ra lỗi không mong muốn.',
+                'status'=>500,
+                $e->getMessage()
+            ]);
         }
     }
 
@@ -63,53 +122,15 @@ class UserController extends Controller
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function loginUser(Request $request)
-    {
-        try {
-            $validateUser = Validator::make($request->all(),
-                [
-                    'email' => 'required|email',
-                    'password' => 'required'
-                ]);
 
-            if($validateUser->fails()){
-                return response()->json([
-                    'status' => false,
-                    'message' => 'validation error',
-                    'errors' => $validateUser->errors()
-                ], 401);
-            }
-
-            if(!Auth::attempt($request->only(['email', 'password']))){
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Email & Password does not match with our record.',
-                ], 401);
-            }
-
-            $user = User::where('email', $request->email)->first();
-
-            return response()->json([
-                'status' => true,
-                'data'=>$user,
-                'message' => 'User Logged In Successfully',
-                'token' => $user->createToken("API TOKEN")->plainTextToken
-            ], 200);
-
-        } catch (\Throwable $th) {
-            return response()->json([
-                'status' => false,
-                'message' => $th->getMessage()
-            ], 500);
-        }
-    }
     public function logout(Request $request){
         $request->user()->currentAccessToken()->delete();
         return response()->json(
             [
                 'status' => 200,
                 'message' => 'User logged out successfully',
-                'data' => null
             ]);
     }
+
+
 }

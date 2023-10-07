@@ -65,5 +65,6 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'CheckAdmin'=>\App\Http\Middleware\CheckAdmin::class,
         'CheckAPI' => \App\Http\Middleware\CheckAPI::class,
+        'can.read.comments' => \App\Http\Middleware\CanReadComments::class,
     ];
 }
